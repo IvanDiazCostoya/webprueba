@@ -1,0 +1,174 @@
+/**
+ * js_loader.js
+ *
+ * Objeto que se encarga de cargar dinámicamente ficheros JavaScript de forma que
+ * se evita que en las páginas con muchas librerías estas se carguen todas al inicio.
+ * Por ejemplo se pueden reducir las librerías que componen el núcleo
+ * de la página principal y descargar dinámicamente las mas raras sólo cuando se vayan
+ * a usar.
+ */
+
+;if(typeof jQuery !== "undefined")
+	
+var jsLoader = (function($, boolLog, undefined) {
+
+  if($==null){
+    return false;
+  }
+  
+  // ** PARTE PRIVADA **
+  var _ = {
+    
+    boolLog: false,
+    libs: [],
+    css: [],
+    boolAddRnd: true,  // Sólo true para el desarrollo
+    
+    //-----------------------------------------------------------------------
+    log: function()
+    {
+      if(_.boolLog) {
+        Util.log(arguments);
+      }
+    },
+  
+    //-----------------------------------------------------------------------
+    escapeHTML: function(url)
+    {
+      return url.split('&').join('&amp;').split('"').join('&quot;').split('<').join('&lt;');
+    },
+  
+    //-----------------------------------------------------------------------
+    absoluteURL: function(url)
+    {
+      var element = document.createElement('span');
+      element.innerHTML = '<a href="'+this.escapeHTML(url)+'">&nbsp;</a>';
+      var res = element.firstChild.href;
+      if($ !== undefined) {
+        $(element).remove();
+      }
+      
+      return res;
+    },
+    
+    //-----------------------------------------------------------------------
+    loadScript: function(url, opciones)
+    {
+      opciones = typeof(opciones) === 'undefined' ? {} : (Util.is_function(opciones) ? { callback: opciones } : opciones);
+      url      = _.absoluteURL(url);
+      
+      var
+        opts = $.extend({
+          callback: null,
+          data: [],
+          cache: !_.boolAddRnd
+        }, opciones);
+      
+      
+      var existe = _.libs.indexOf(url) >= 0;
+  
+      if(!existe) {
+        _.libs.push(url);  // Anotamos que ya tenemos cargada la librería
+  
+        _.log('SE CARGA ---> ' + url);
+  
+        var script = document.createElement("script");
+        script.type = "text/javascript";
+  
+        if(script.readyState) { // IE: OJO en este no se como detectar el error pero como lo pruebo en Firefox...xº
+          script.onreadystatechange = function () {
+            if(script.readyState == "loaded" || script.readyState == "complete") {
+              script.onreadystatechange = null;
+              if(opts.callback) {
+                opts.callback.apply(undefined, opts.data);
+              }
+            }
+          };
+        } else { // Otros
+          script.onload = function () {
+            if(opts.callback) {
+              opts.callback.apply(undefined, opts.data);
+            }
+          };
+  
+          script.onerror = function () {
+            
+            var indice = _.libs.indexOf(url);
+            if(indice >= 0) {
+              _.libs.splice(indice, 1);  // Sacamos la url del array de cargados
+            }
+  
+            _.log('ERROR AL CARGAR ---> ' + url);
+          };
+        }
+        
+        script.src = url;
+        if(!opts.cache){
+          script.src+= "?rnd=" + Math.random();
+        }
+        
+        document.getElementsByTagName("head")[0].appendChild(script);
+      }
+      else {
+        _.log('YA EN CACHE --> ' + url);
+        if(opts.callback) {
+          opts.callback.apply(undefined, opts.data);
+        }
+      }
+  
+    },  // loadScript()
+  
+    //-----------------------------------------------------------------------
+    loadCSS: function(url)
+    {
+      url      = _.absoluteURL(url);
+      
+      var
+        id_css = "",
+        existe = _.css.indexOf(url) >= 0;
+
+      
+      if(!existe) {
+        id_css = Util.getFilename(url) + "_css_" + _.css.length;
+        _.css.push(url);
+
+        _.log('SE CARGA ---> ' + url);
+        
+        var cssId = 'myCss';  // you could encode the css path itself to generate id..
+        if(!document.getElementById(id_css))
+        {
+          var head   = document.getElementsByTagName('head')[0];
+          var link   = document.createElement('link');
+          link.id    = id_css;
+          link.rel   = 'stylesheet';
+          link.type  = 'text/css';
+          link.href  = url + (_.boolAddRnd ? "?rnd=" + Math.random() : "");
+          link.media = 'all';
+          head.appendChild(link);
+        }
+      }
+      else {
+        _.log('YA EN CACHE --> ' + url);
+      }
+
+    }  // loadCSS()
+
+    //-----------------------------------------------------------------------
+
+  };
+
+  // ** PARTE PUBLICA **
+  var handler = {
+    loadScript: _.loadScript,
+    loadCSS:    _.loadCSS
+  };
+  
+  
+  // Inicialización del módulo antes de devolver el interfaz público.
+  //$(_.init);
+  _.boolLog = boolLog !== undefined ? boolLog : false;
+  
+  return handler;  
+  
+})(jQuery, false);
+
